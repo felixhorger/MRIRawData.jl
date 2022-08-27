@@ -15,20 +15,11 @@ module MRIRawData
 
 	function twixread(path::AbstractString)
 		!isfile(path) && error("File '$path' not found")
-		local twix, twix_image, kspace
-		let
-			the_stdout = stdout
-			the_stderr = stderr
-			redirect_stdout(open("/dev/null", "w")) # Deedleduuuu Waaa
-			redirect_stderr(open("/dev/null", "w")) # Print the progress to stderr, really? Amazing
-			twix = siemens.mapVBVD(path)
-			twix_image = twix["image"]
-			twix_image.squeeze = true
-			twix_image.flagRemoveOS = true
-			kspace = twix_image.unsorted()
-			redirect_stdout(the_stdout)
-			redirect_stderr(the_stderr)
-		end
+		twix = siemens.mapVBVD(path; quiet=true)
+		twix_image = twix["image"]
+		twix_image.squeeze = true
+		twix_image.flagRemoveOS = true
+		kspace = twix_image.unsorted(quiet=true)
 		num_columns = convert(Int, twix_image["NCol"]) ÷ 2 # F me
 		other_dims = convert.(
 			Int,

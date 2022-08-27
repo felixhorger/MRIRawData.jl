@@ -1,0 +1,7 @@
+name = "MRIRawData"
+uuid = "ab6a8953-5f3e-4da4-aac7-531e27a3d700"
+authors = ["Felix Horger <felix.horger@kcl.ac.uk>"]
+version = "0.1.0"
+
+[deps]
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"

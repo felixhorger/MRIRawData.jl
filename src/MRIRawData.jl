@@ -64,12 +64,12 @@ module MRIRawData
 		return indices, num_index
 	end
 
-	for (param, twix_name) in (("TE", "alTE"), ("TR", "alTR"), ("FA", "adFlipAngleDegree"))
+	for (param, twix_name, unit) in (("TE", "alTE", 0.001), ("TR", "alTR", 0.001), ("FA", "adFlipAngleDegree", π / 180.0))
 		symb = Symbol(param)
 		func_name = Symbol("twix_" * param)
 		eval(Expr(:function,
 			Expr(:call, func_name, :twix, :(i::Integer)),
-			:(twix["hdr"]["MeasYaps"][$twix_name, string(i-1)])
+			:(twix["hdr"]["MeasYaps"][$twix_name, string(i-1)] * $unit)
 		))
 		eval(Expr(:function, Expr(:call, func_name, :twix), quote
 			bogus = twix["hdr"]["MeasYaps"]
@@ -77,7 +77,7 @@ module MRIRawData
 			i = 0
 			while true
 				key = ($twix_name, string(i))
-				v = get(bogus, key, 0) / 1000.0
+				v = get(bogus, key, 0) * $unit
 				v == 0 && break
 				push!($symb, v)
 				i += 1

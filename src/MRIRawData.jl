@@ -46,8 +46,7 @@ module MRIRawData
 			num_channels	= convert(Int, twix_obj["NCha"])
 
 			but it happens that this doesn't match with the FOV that was selected, i.e.
-			this gives you the sampled k-space size, not necessarily matching the reconstructed one
-			I will refrain from using the language I want to use.
+			this gives you the sampled k-space size, not necessarily matching the reconstructed one.
 		=#
 		bogus = twix["hdr"]["Meas"]
 		num_lines		= convert(Int, bogus["lPhaseEncodingLines"])
@@ -93,13 +92,13 @@ module MRIRawData
 	
 	"""
 		Returns dc, β, fov, Δx
+		dc ≡ direction cosines
 		fov[1] (readout) is set according to twix["image"].flagRemoveOS
 		Δx is translation of the centre of volume.
 		To get the origin, do origin = Δx .- R * (0.5 .* fov)
 		where R is the rotation matrix of the volume obtained using MRICoordinates.ras (RAS coordinates)
 		β is inplane rotation
 	"""
-	# TODO: Split that
 	function twix_coordinates(twix; key::AbstractString="image")
 		bogus = twix["hdr"]["MeasYaps"]
 		keys = ("sSliceArray", "asSlice", "0") # Lord have mercy
@@ -128,5 +127,25 @@ module MRIRawData
 		end
 		return dc, β, fov, Δx
 	end
+
+	const twix_num_WIPparameters = 14
+	"""
+		types: 0 for integer, 1 for double
+	"""
+	function twix_WIPparameters(twix)
+		bogus = twix["hdr"]["MeasYaps"]
+		params = Vector{Union{Int64, Float64}}(undef, twix_num_WIPparameters)
+		for i = 1:twix_num_WIPparameters
+			j = i - 1
+			key = ("sWipMemBlock", "alFree", "$j")
+			if haskey(bogus, key)
+				params[i] = bogus[key]
+			else
+				params[i] = get(bogus, ("sWipMemBlock", "adFree", "$j"), 0)
+			end
+		end
+		return params
+	end
+
 end
 

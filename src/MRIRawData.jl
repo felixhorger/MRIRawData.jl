@@ -13,6 +13,8 @@ module MRIRawData
 	#	shape::NTuple{4, Int64}
 	#end
 
+	# TODO: Naming of functions is not really julian
+	# Probably best to wrap twix into struct to give it a proper julia type to do multiple dispatch on
 	function readtwix(path::AbstractString; quiet=true)
 		!isfile(path) && error("File '$path' not found")
 		twix = siemens.mapVBVD(path; quiet)
@@ -24,7 +26,7 @@ module MRIRawData
 		kspace = twix_obj.unsorted(;quiet)
 		return kspace
 	end
-	function twix_remove_oversampling(twix, b::Bool=true; key::AbstractString="image")
+	function twix_remove_oversampling!(twix, b::Bool=true; key::AbstractString="image")
 		twix[key].flagRemoveOS = b
 		return
 	end
@@ -97,6 +99,7 @@ module MRIRawData
 		where R is the rotation matrix of the volume obtained using MRICoordinates.ras (RAS coordinates)
 		β is inplane rotation
 	"""
+	# TODO: Split that
 	function twix_coordinates(twix; key::AbstractString="image")
 		bogus = twix["hdr"]["MeasYaps"]
 		keys = ("sSliceArray", "asSlice", "0") # Lord have mercy

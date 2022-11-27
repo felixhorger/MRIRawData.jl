@@ -4,4 +4,5 @@ authors = ["Felix Horger <felix.horger@kcl.ac.uk>"]
 version = "0.1.0"
 
 [deps]
+MRICoordinates = "3b8319e5-e262-4cb7-99a1-6c5370fe4937"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"

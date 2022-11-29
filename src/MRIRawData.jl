@@ -149,7 +149,7 @@ module MRIRawData
 	"""
 	function get_patient_position(raw::SiemensRawData)
 		pos_raw = raw.data["hdr"]["Config"]["PatientPosition"]
-		local pos::Orientation
+		local pos::MRICoordinates.PatientPosition
 		if pos_raw == "HFS"
 			pos = MRICoordinates.HeadFirstSupine
 		elseif pos_raw == "HFP"

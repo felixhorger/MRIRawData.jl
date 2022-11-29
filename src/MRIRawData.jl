@@ -3,7 +3,7 @@ module MRIRawData
 
 	import PyCall
 	import Base: size, show
-	import MRICoordinates: PatientPosition
+	import MRICoordinates
 
 	function __init__()
 		global siemens = PyCall.pyimport("mapvbvd")
@@ -15,24 +15,24 @@ module MRIRawData
 		Some of the internal code still uses the name twix to separate it from other formats.
 	"""
 	struct SiemensRawData
-		data::PyCall.PyObject
+		data::Dict{String, Any}
 	end
 
 	show(io::IO, _::SiemensRawData) = print("Siemens MRI raw data")
 	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = show(io, raw)
 	load_siemens(path::AbstractString; quiet=true) = SiemensRawData(siemens.mapVBVD(path; quiet))
 
-	function get_kspace(raw::SiemensRawData; quiet::Bool=true, key::AbstractString="image")
+	function get_kspace(raw::SiemensRawData; quiet::Bool=true, key::String="image")
 		# k-space
 		twix_obj = raw.data[key]
 		kspace = twix_obj.unsorted(;quiet)
 		return kspace
 	end
-	function remove_oversampling!(raw::SiemensRawData, b::Bool=true; key::AbstractString="image")
+	function remove_oversampling!(raw::SiemensRawData, b::Bool=true; key::String="image")
 		raw.data[key].flagRemoveOS = b
 		return
 	end
-	function size(raw::SiemensRawData; key::AbstractString="image")
+	function size(raw::SiemensRawData; key::String="image")
 		twix = raw.data
 		twix_obj = twix[key]
 		# Columns need extra care because of oversampling
@@ -57,11 +57,11 @@ module MRIRawData
 		num_channels	= convert(Int, twix_obj["NCha"])
 		return num_columns, num_lines, num_partitions, num_channels
 	end
-	function get_sampling(raw::SiemensRawData; key::AbstractString="image")
+	function get_sampling(raw::SiemensRawData; key::String="image")
 		twix_obj = raw.data[key]
 		return [CartesianIndex(Int.((l, p)) .+ 1) for (l, p) in zip(twix_obj.Lin, twix_obj.Par)]
 	end
-	function get_sampling_index(raw::SiemensRawData, name::Symbol; key::AbstractString="image")
+	function get_sampling_index(raw::SiemensRawData, name::Symbol; key::String="image")
 		twix_obj = raw.data[key]
 		num_index = convert.(Int, twix_obj["N" * String(name)])
 		indices = 1 .+ Int.(getproperty(twix_obj, name))
@@ -95,12 +95,10 @@ module MRIRawData
 		Returns normal, β, fov, Δx
 		normal ≡ partition direction in patient coordinate system (LPS coordinates)
 		fov[1] (readout) is set according to twix["image"].flagRemoveOS
-		Δx is translation of the centre of volume.
-		To get the origin, do origin = Δx .- R * (0.5 .* fov)
-		where R is the rotation matrix of the volume obtained using MRICoordinates.gradient2device
+		Δx is translation of the centre of volume in patient coordinates.
 		β is inplane rotation, clockwise
 	"""
-	function get_coordinates(raw::SiemensRawData; key::AbstractString="image")
+	function get_coordinates(raw::SiemensRawData; key::String="image")
 		twix = raw.data
 		bogus = twix["hdr"]["MeasYaps"]
 		keys = ("sSliceArray", "asSlice", "0") # Lord have mercy
@@ -136,23 +134,23 @@ module MRIRawData
 	function get_patient_position(raw::SiemensRawData)
 		pos = raw.data["hdr"]["Config"]["PatientPosition"]
 		if pos == "HFS"
-			return HeadFirstSupine
+			return MRICoordinates.HeadFirstSupine
 		elseif pos == "HFP"
-			return HeadFirstProne
+			return MRICoordinates.HeadFirstProne
 		elseif pos == "HFLR"
-			return HeadFirstLateralRight
+			return MRICoordinates.HeadFirstLateralRight
 		elseif pos == "HFLL"
-			return HeadFirstLateralLeft
+			return MRICoordinates.HeadFirstLateralLeft
 		elseif pos == "FFS"
-			return FeetFirstSupine
+			return MRICoordinates.FeetFirstSupine
 		elseif pos == "FFP"
-			return FeetFirstProne
+			return MRICoordinates.FeetFirstProne
 		elseif pos == "FFLR"
-			return FeetFirstLateralRight
+			return MRICoordinates.FeetFirstLateralRight
 		elseif pos == "FFLL"
-			return FeetFirstLateralLeft
+			return MRICoordinates.FeetFirstLateralLeft
 		end
-		return InvalidPosition
+		return MRICoordinates.InvalidPosition
 	end
 
 	"""

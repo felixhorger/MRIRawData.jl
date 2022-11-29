@@ -68,7 +68,11 @@ module MRIRawData
 		return indices, num_index
 	end
 
-	for (param, twix_name, unit) in (("TE", "alTE", 0.001), ("TR", "alTR", 0.001), ("FA", "adFlipAngleDegree", π / 180.0))
+	for (param, twix_name, unit) in (
+		("TE", "alTE", 0.001),
+		("TR", "alTR", 0.001),
+		("FA", "adFlipAngleDegree", π / 180.0)
+	)
 		symb = Symbol(param)
 		func_name = Symbol("get_" * param)
 		eval(Expr(:function,
@@ -88,6 +92,18 @@ module MRIRawData
 			end
 			return $symb
 		end))
+	end
+
+	"""
+		Dwell time in μs
+	"""
+	function get_dwelltime(raw::SiemensRawData)
+		# Get array of dwell times (why array?)
+		bogus = raw.data["hdr"]["Meas"]["alDwellTime"] # I don't want to know why this is a string
+		# Find the first blank and get first "word"
+		bogus = bogus[1:findfirst(" ", bogus).start-1]
+		# Convert to number and choose proper unit
+		return parse(Float64, bogus) / 1000.0
 	end
 
 	
@@ -132,25 +148,28 @@ module MRIRawData
 		Patient position(ing)
 	"""
 	function get_patient_position(raw::SiemensRawData)
-		pos = raw.data["hdr"]["Config"]["PatientPosition"]
-		if pos == "HFS"
-			return MRICoordinates.HeadFirstSupine
-		elseif pos == "HFP"
-			return MRICoordinates.HeadFirstProne
-		elseif pos == "HFLR"
-			return MRICoordinates.HeadFirstLateralRight
-		elseif pos == "HFLL"
-			return MRICoordinates.HeadFirstLateralLeft
-		elseif pos == "FFS"
-			return MRICoordinates.FeetFirstSupine
-		elseif pos == "FFP"
-			return MRICoordinates.FeetFirstProne
-		elseif pos == "FFLR"
-			return MRICoordinates.FeetFirstLateralRight
-		elseif pos == "FFLL"
-			return MRICoordinates.FeetFirstLateralLeft
+		pos_raw = raw.data["hdr"]["Config"]["PatientPosition"]
+		local pos::Orientation
+		if pos_raw == "HFS"
+			pos = MRICoordinates.HeadFirstSupine
+		elseif pos_raw == "HFP"
+			pos = MRICoordinates.HeadFirstProne
+		elseif pos_raw == "HFLR"
+			pos = MRICoordinates.HeadFirstLateralRight
+		elseif pos_raw == "HFLL"
+			pos = MRICoordinates.HeadFirstLateralLeft
+		elseif pos_raw == "FFS"
+			pos = MRICoordinates.FeetFirstSupine
+		elseif pos_raw == "FFP"
+			pos = MRICoordinates.FeetFirstProne
+		elseif pos_raw == "FFLR"
+			pos = MRICoordinates.FeetFirstLateralRight
+		elseif pos_raw == "FFLL"
+			pos = MRICoordinates.FeetFirstLateralLeft
+		else
+			error("Could not determine patient position from \"$raw\"")
 		end
-		return MRICoordinates.InvalidPosition
+		return pos
 	end
 
 	"""

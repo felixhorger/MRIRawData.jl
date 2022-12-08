@@ -10,16 +10,18 @@ module MRIRawData
 	end
 
 	"""
-		Wrapper for Siemens raw data.
-		This name is more informative than "twix".
-		Some of the internal code still uses the name twix to separate it from other formats.
+		SiemensRawData
+
+	Wrapper for Siemens raw data.
+	This name is more informative than "twix".
+	Some of the internal code still uses the name twix to separate it from other formats.
 	"""
 	struct SiemensRawData
 		data::Dict{String, Any}
 	end
 
 	show(io::IO, _::SiemensRawData) = print("Siemens MRI raw data")
-	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = show(io, raw)
+	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = "Siemens MRI raw data"
 	load_siemens(path::AbstractString; quiet=true) = SiemensRawData(siemens.mapVBVD(path; quiet))
 
 	function get_kspace(raw::SiemensRawData; quiet::Bool=true, key::String="image")
@@ -28,10 +30,21 @@ module MRIRawData
 		kspace = twix_obj.unsorted(;quiet)
 		return kspace
 	end
+
+	"""
+		remove_oversampling!(raw::SiemensRawData, b::Bool=true; key::String="image")
+
+	Set the flag that triggers removal of oversampling along readout direction.
+
+	Note:
+	This is achieved in [pymapvbvd](https://github.com/felixhorger/pymapvbvd)
+	via sinc-interpolation in k-space (by `fft`, cropping and `ifft`)
+	"""
 	function remove_oversampling!(raw::SiemensRawData, b::Bool=true; key::String="image")
 		raw.data[key].flagRemoveOS = b
 		return
 	end
+
 	function size(raw::SiemensRawData; key::String="image")
 		twix = raw.data
 		twix_obj = twix[key]
@@ -57,16 +70,14 @@ module MRIRawData
 		num_channels	= convert(Int, twix_obj["NCha"])
 		return num_columns, num_lines, num_partitions, num_channels
 	end
+	size(raw::SiemensRawData, name::Symbol; key::String="image") = convert(Int, raw.data[key]["N" * String(name)])
+
 	function get_sampling(raw::SiemensRawData; key::String="image")
 		twix_obj = raw.data[key]
 		return [CartesianIndex(Int.((l, p)) .+ 1) for (l, p) in zip(twix_obj.Lin, twix_obj.Par)]
 	end
-	function get_sampling_index(raw::SiemensRawData, name::Symbol; key::String="image")
-		twix_obj = raw.data[key]
-		num_index = convert.(Int, twix_obj["N" * String(name)])
-		indices = 1 .+ Int.(getproperty(twix_obj, name))
-		return indices, num_index
-	end
+
+	get_sampling_index(raw::SiemensRawData, name::Symbol; key::String="image") = 1 .+ Int.(getproperty(raw.data[key], name))
 
 	for (param, twix_name, unit) in (
 		("TE", "alTE", 0.001),
@@ -108,11 +119,25 @@ module MRIRawData
 
 	
 	"""
-		Returns normal, β, fov, Δx
-		normal ≡ partition direction in patient coordinate system (LPS coordinates)
-		fov[1] (readout) is set according to twix["image"].flagRemoveOS
-		Δx is translation of the centre of volume in patient coordinates.
-		β is inplane rotation, clockwise
+			get_coordinates(raw::SiemensRawData; key::String="image")
+
+	Information about the scan's coordinate system.
+
+	Returns
+		- `normal`: three-element vector `[sagittal, coronal, transversal]`,
+		indicating partition direction in patient coordinate system.
+		For definition of patient coordinates see [MRICoordinates.jl](https://www.github/felixhorger/MRICoordinates.jl)
+		- `fov`: three-element vector `[readout, line, partition]` indicating the field of view (in mm).
+		`fov[1]` is adjusted according to the oversampling flag set with `remove_oversampling!`.
+		- `Δx`: three element translation vector of the scanning volume centre in patient coordinates.
+		One unit of `normal` is subtracted to account for the partition direction shift (Siemens standard).
+		- `β`: inplane rotation angle, clockwise around `normal` (left hand rule).
+
+	Note: the information returned is adjusted for using `ifft(kspace)` and the package
+	[HomogeneousCoordinates.jl](https://www.github/felixhorger/HomogeneousCoordinates.jl)
+	for coordinate transformations. Siemens however uses `fft(kspace)`.
+	Despite mathematically equivalent (by switching of gradient directions),
+	the `ifft(kspace)` choice is more aligned with the standard use of `fft` and `ifft`.
 	"""
 	function get_coordinates(raw::SiemensRawData; key::String="image")
 		twix = raw.data
@@ -128,7 +153,7 @@ module MRIRawData
 		orientations = ("dSag", "dCor", "dTra")
 		for i = 1:3
 			key = (keys..., "sNormal", orientations[i])
-			normal[i] = get(bogus, key, 0.0)
+			normal[i] = -get(bogus, key, 0.0)
 		end
 		# In-plane rotation
 		β = let
@@ -141,6 +166,7 @@ module MRIRawData
 			key = (keys..., "sPosition", orientations[i])
 			Δx[i] = get(bogus, key, 0.0)
 		end
+		Δx .-= normal # partition shift (Siemens)
 		return normal, β, fov, Δx
 	end
 
@@ -154,27 +180,26 @@ module MRIRawData
 			pos = MRICoordinates.HeadFirstSupine
 		elseif pos_raw == "HFP"
 			pos = MRICoordinates.HeadFirstProne
-		elseif pos_raw == "HFLR"
+		elseif pos_raw == "HFDR"
 			pos = MRICoordinates.HeadFirstLateralRight
-		elseif pos_raw == "HFLL"
+		elseif pos_raw == "HFDL"
 			pos = MRICoordinates.HeadFirstLateralLeft
 		elseif pos_raw == "FFS"
 			pos = MRICoordinates.FeetFirstSupine
 		elseif pos_raw == "FFP"
 			pos = MRICoordinates.FeetFirstProne
-		elseif pos_raw == "FFLR"
+		elseif pos_raw == "FFDR" # D for "decubitus"
 			pos = MRICoordinates.FeetFirstLateralRight
-		elseif pos_raw == "FFLL"
+		elseif pos_raw == "FFDL"
 			pos = MRICoordinates.FeetFirstLateralLeft
 		else
-			error("Could not determine patient position from \"$raw\"")
+			error("Could not determine patient position from \"$pos_raw\"")
 		end
 		return pos
 	end
 
 	"""
-		types: 0 for integer, 1 for double
-		The so called "WIP" parameters
+		The Siemens "WIP" parameters
 	"""
 	function get_special_parameters(raw::SiemensRawData)
 		num_WIPparameters = 14
@@ -191,7 +216,10 @@ module MRIRawData
 		end
 		return params
 	end
-	# Special case, convenient
+
+	"""
+		Convenience for getting the TR ratio of a standard Siemens actual flip-angle imaging scan
+	"""
 	get_afi_TR_ratio(raw::SiemensRawData) = raw.data["hdr"]["MeasYaps"][("sWipMemBlock", "alFree", "10")]
 
 end

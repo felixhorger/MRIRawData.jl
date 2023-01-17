@@ -9,6 +9,8 @@ module MRIRawData
 		global siemens = PyCall.pyimport("mapvbvd")
 	end
 
+	@enum PatientSex male=1 female=2 other=3
+
 	"""
 		SiemensRawData
 
@@ -21,8 +23,11 @@ module MRIRawData
 	end
 
 	show(io::IO, _::SiemensRawData) = print("Siemens MRI raw data")
-	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = "Siemens MRI raw data"
-	load_siemens(path::AbstractString; quiet=true) = SiemensRawData(siemens.mapVBVD(path; quiet))
+	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = print("Siemens MRI raw data")
+	function load_siemens(path::AbstractString; quiet=true)
+		!isfile(path) && throw(Base.IOError("no such file"))
+		return SiemensRawData(siemens.mapVBVD(path; quiet))
+	end
 
 	function get_kspace(raw::SiemensRawData; quiet::Bool=true, key::String="image")
 		# k-space
@@ -72,6 +77,9 @@ module MRIRawData
 	end
 	size(raw::SiemensRawData, name::Symbol; key::String="image") = convert(Int, raw.data[key]["N" * String(name)])
 
+	# TODO: Not nice that this doesn't work for 2D with slices (what about slabs? i.e. partitions inside slices)
+	# Question: Try to detect slices vs. partitions or leave as is and have this as convenience for 3D?
+	# Note: For the Siemens localiser, NPar is set to 32 even though the corresponding indices only go to 1. Arggg
 	function get_sampling(raw::SiemensRawData; key::String="image")
 		twix_obj = raw.data[key]
 		return [CartesianIndex(Int.((l, p)) .+ 1) for (l, p) in zip(twix_obj.Lin, twix_obj.Par)]
@@ -197,6 +205,8 @@ module MRIRawData
 		end
 		return pos
 	end
+
+	get_patient_sex(raw::SiemensRawData) = PatientSex(Int(raw.data["hdr"]["Config"]["PatientSex"]))
 
 	"""
 		The Siemens "WIP" parameters

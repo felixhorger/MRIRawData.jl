@@ -25,7 +25,7 @@ module MRIRawData
 	show(io::IO, _::SiemensRawData) = print("Siemens MRI raw data")
 	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = print("Siemens MRI raw data")
 	function load_siemens(path::AbstractString; quiet=true)
-		!isfile(path) && throw(Base.IOError("no such file"))
+		!isfile(path) && throw(SystemError("opening file $(path): No such file"))
 		return SiemensRawData(siemens.mapVBVD(path; quiet))
 	end
 

@@ -219,9 +219,9 @@ module MRIRawData
 			j = i - 1
 			key = ("sWipMemBlock", "alFree", "$j")
 			if haskey(bogus, key)
-				params[i] = bogus[key]
+				params[i] = Int(bogus[key])
 			else
-				params[i] = get(bogus, ("sWipMemBlock", "adFree", "$j"), 0)
+				params[i] = Float64(get(bogus, ("sWipMemBlock", "adFree", "$j"), 0.0))
 			end
 		end
 		return params

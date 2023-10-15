@@ -29,6 +29,10 @@ module MRIRawData
 		return SiemensRawData(siemens.mapVBVD(path; quiet))
 	end
 
+	function keys(raw::SiemensRawData)
+		return keys(raw.data)
+	end
+
 	function get_kspace(raw::SiemensRawData; quiet::Bool=true, key::String="image")
 		# k-space
 		twix_obj = raw.data[key]
@@ -125,9 +129,13 @@ module MRIRawData
 		return parse(Float64, bogus) / 1000.0
 	end
 
+	size_refscan(raw::SiemensRawData) = Int.((raw.data["hdr"]["Meas"]["NRefLin"], raw.data["hdr"]["Meas"]["NRefPar"]))
+	get_acceleration(raw::SiemensRawData) = Int.((raw.data["hdr"]["Meas"]["lAccelFactPE"], raw.data["hdr"]["Meas"]["lAccelFact3D"]))
+
+
 	
 	"""
-			get_coordinates(raw::SiemensRawData; key::String="image")
+		get_coordinates(raw::SiemensRawData; key::String="image")
 
 	Information about the scan's coordinate system.
 

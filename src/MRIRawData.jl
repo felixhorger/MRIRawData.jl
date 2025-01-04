@@ -1,8 +1,10 @@
 
 module MRIRawData
 
+	# TODO: add function to get number of readouts, maybe via sampling?
+
 	import PyCall
-	import Base: size, show
+	import Base: size, show, keys
 	import MRICoordinates
 
 	function __init__()
@@ -19,14 +21,18 @@ module MRIRawData
 	Some of the internal code still uses the name twix to separate it from other formats.
 	"""
 	struct SiemensRawData
-		data::Dict{String, Any}
+		data::Dict{Any, Any}
 	end
 
 	show(io::IO, _::SiemensRawData) = print("Siemens MRI raw data")
 	show(io::IO, ::MIME"text/plain", raw::SiemensRawData) = print("Siemens MRI raw data")
 	function load_siemens(path::AbstractString; quiet=true)
 		!isfile(path) && throw(SystemError("opening file $(path): No such file"))
-		return SiemensRawData(siemens.mapVBVD(path; quiet))
+		py_twix = siemens.mapVBVD(path; quiet)
+		if isa(py_twix, Vector)
+			py_twix = last(py_twix)
+		end
+		return SiemensRawData(py_twix)
 	end
 
 	function keys(raw::SiemensRawData)
@@ -66,7 +72,7 @@ module MRIRawData
 		#=
 			Would be too easy if one could use
 
-			num_lines		= convert(Int, twix_obj["NLin"])
+			num_lines	= convert(Int, twix_obj["NLin"])
 			num_partitions	= convert(Int, twix_obj["NPar"])
 			num_channels	= convert(Int, twix_obj["NCha"])
 
@@ -74,7 +80,7 @@ module MRIRawData
 			this gives you the sampled k-space size, not necessarily matching the reconstructed one.
 		=#
 		bogus = twix["hdr"]["Meas"]
-		num_lines		= convert(Int, bogus["lPhaseEncodingLines"])
+		num_lines	= convert(Int, bogus["lPhaseEncodingLines"])
 		num_partitions	= convert(Int, bogus["lPartitions"])
 		num_channels	= convert(Int, twix_obj["NCha"])
 		return num_columns, num_lines, num_partitions, num_channels
@@ -94,6 +100,7 @@ module MRIRawData
 	for (param, twix_name, unit) in (
 		("TE", "alTE", 0.001),
 		("TR", "alTR", 0.001),
+		("TI", "alTI", 0.001),
 		("FA", "adFlipAngleDegree", π / 180.0)
 	)
 		symb = Symbol(param)
@@ -130,6 +137,7 @@ module MRIRawData
 	end
 
 	size_refscan(raw::SiemensRawData) = Int.((raw.data["hdr"]["Meas"]["NRefLin"], raw.data["hdr"]["Meas"]["NRefPar"]))
+	size_acquired(raw::SiemensRawData) = Int.((raw.data["hdr"]["Meas"]["NLin"], raw.data["hdr"]["Meas"]["NPar"]))
 	get_acceleration(raw::SiemensRawData) = Int.((raw.data["hdr"]["Meas"]["lAccelFactPE"], raw.data["hdr"]["Meas"]["lAccelFact3D"]))
 
 
@@ -155,6 +163,8 @@ module MRIRawData
 	Despite mathematically equivalent (by switching of gradient directions),
 	the `ifft(kspace)` choice is more aligned with the standard use of `fft` and `ifft`.
 	"""
+	# TODO: twixeater package returns without minus!!!!!!!!
+	# TODO: don't delete this, copy all the bits that adjust the data read from file
 	function get_coordinates(raw::SiemensRawData; key::String="image")
 		twix = raw.data
 		bogus = twix["hdr"]["MeasYaps"]
@@ -239,6 +249,21 @@ module MRIRawData
 		Convenience for getting the TR ratio of a standard Siemens actual flip-angle imaging scan
 	"""
 	get_afi_TR_ratio(raw::SiemensRawData) = raw.data["hdr"]["MeasYaps"][("sWipMemBlock", "alFree", "10")]
+
+	# TODO: reference is fair to be abbreviated by ref
+	get_reference_voltage(raw::SiemensRawData) = raw.data["hdr"]["Meas"]["TransmitterReferenceAmplitude"]
+
+	get_dico_readout_dwelltime(raw::SiemensRawData) = raw.data["hdr"]["Meas"]["lVOPReadoutDwellTime_us"]
+
+	function get_tx_scale_factors(raw::SiemensRawData; key::String="image")
+		num_tx_channels::Int = raw.data["hdr"]["MeasYaps"][("sTXSPEC", "asNucleusInfo", "0", "CompProtectionValues", "MaxOnlineTxAmpl", "__attribute__", "size")] ÷ 2
+		return ComplexF64[
+			(      get(raw.data["hdr"]["MeasYaps"], ("sTXSPEC", "aTxScaleFactor", string(c), "dRe"), 0.0)
+			+ im * get(raw.data["hdr"]["MeasYaps"], ("sTXSPEC", "aTxScaleFactor", string(c), "dIm"), 0.0))
+			for c = 0:num_tx_channels-1
+		]
+	end
+
 
 end
 
